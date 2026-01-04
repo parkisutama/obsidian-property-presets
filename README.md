@@ -1,65 +1,164 @@
-# Obsidian Sample Plugin
+# Property Presets
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+A lightweight Obsidian plugin that provides autocomplete for frontmatter properties based on a simple JSON configuration.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+## Features
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+- **Property Buttons**: Click a button (⋮⋮) next to any property in Live Preview or Reading mode to quickly select from preset values
+- **Source Mode Autocomplete**: Get type-ahead suggestions when editing YAML frontmatter in source mode
+- **Property Type Awareness**: Supports different property types (text, list, multitext, tags) with appropriate behavior
+- **Smart Multi-Value Handling**: For list/tag properties, adds values without duplicates; for single-value properties, replaces the value
+- **Auto-Reload**: Automatically detects external changes to configuration files and reloads presets
+- **Easy Configuration**: Simple JSON files to configure presets and property types
 
-## First time developing plugins?
+## How It Works
 
-Quick starting guide for new plugin devs:
+### Visual Property Buttons (Live Preview/Reading Mode)
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+When viewing notes, the plugin injects a button (⋮⋮) next to each property that has presets configured. Click the button to open a menu with preset options:
 
-## Releasing new releases
+- **Single-value properties** (text, number): Click an option to set the property value
+- **Multi-value properties** (list, multitext, tags): Click an option to add it to the existing values (prevents duplicates)
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+The button appears directly in the properties panel using Obsidian's `metadataEditor` API.
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+### Source Mode Autocomplete
 
-## Adding your plugin to the community plugin list
+When editing YAML frontmatter in source mode, the plugin provides suggestions as you type property values. After typing `propertyname:` and a space, suggestions will appear automatically.
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+## Installation
 
-## How to use
+### Manual Installation
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/parkisutama/obsidian-property-presets/releases)
+2. Create a folder `<vault>/.obsidian/plugins/obsidian-property-presets/`
+3. Copy the files into that folder
+4. Reload Obsidian and enable the plugin in **Settings → Community plugins**
 
-## Manually installing the plugin
+## Configuration
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+The plugin uses two JSON configuration files stored in your vault's `.obsidian` folder:
 
-## Improve code quality with eslint
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
+### presets.json
+
+Defines preset values for each property. The plugin creates this file with default values on first run:
+
+```json
+{
+  "status": ["To Do", "In Progress", "Done"],
+  "priority": ["High", "Medium", "Low"],
+  "tags": ["journal", "project", "note"]
+}
+```
+
+### types.json
+
+Specifies the type of each property. The plugin creates this file with default values on first run:
+
+```json
+{
+  "status": "text",
+  "priority": "text",
+  "tags": "tags"
+}
+```
+
+Valid types:
+
+- `text` - Single text value (replaces existing value)
+- `multitext` - Multiple text values (adds to existing values)
+- `list` - List of values (adds to existing values)
+- `tags` - Tags (adds to existing values)
+- `number` - Numeric value
+- `date` - Date value
+- `datetime` - Date and time value
+- `checkbox` - Boolean value
+
+**Note**: For multi-value types (`list`, `multitext`, `tags`), the plugin adds values to the existing array without creating duplicates. For single-value types (`text`, `number`, etc.), the plugin replaces the existing value.
+
+The plugin automatically detects changes to these files and reloads presets without requiring a manual reload.
+
+## Commands
+
+The plugin adds four commands accessible via the command palette (`Ctrl/Cmd+P`):
+
+1. **Edit presets (JSON)** - Opens a modal to edit your presets configuration
+2. **Edit property types (JSON)** - Opens a modal to edit property type definitions
+3. **Reload presets from file** - Manually reloads the configuration files
+4. **Refresh property icons** - Manually refreshes the property buttons in the current view
+
+## Usage Tips
+
+1. **Start Simple**: Begin with a few common properties like `status`, `priority`, or `tags`
+2. **Edit Configuration**: Use the built-in commands to edit presets and types, or edit the JSON files directly in `<vault>/.obsidian/`
+3. **Multiple Vaults**: Each vault has its own separate configuration
+4. **Auto-Reload**: The plugin automatically detects and reloads configuration changes made externally
+5. **Duplicate Prevention**: For multi-value properties, the plugin prevents adding duplicate values
+
+## Behavior by Property Type
+
+- **Single-value properties** (`text`, `number`, `date`, etc.): Clicking a preset **replaces** the current value
+- **Multi-value properties** (`list`, `multitext`, `tags`): Clicking a preset **adds** to existing values (no duplicates)
+
+## Mobile Support
+
+This plugin is fully compatible with Obsidian mobile (`isDesktopOnly: false`).
+
+## Development
+
+### Setup
+
+```bash
+npm install
+```
+
+### Build
+
+```bash
+npm run build
+```
+
+### Development Mode (Watch)
+
+```bash
+npm run dev
+```
+
+### Linting
+
+```bash
+npm run lint
+```
+
+### Testing
+
+For manual testing, copy `main.js`, `manifest.json`, and `styles.css` to:
+
+```
+<vault>/.obsidian/plugins/obsidian-property-presets/
+```
+
+Then reload Obsidian and enable the plugin in **Settings → Community plugins**.
+
+## Project Structure
+
+```
+src/
+  main.ts       # Plugin entry point, commands, icon injection
+  settings.ts   # Settings interface and tab
+```
+
+## Contributing
+
+Issues and pull requests are welcome on [GitHub](https://github.com/parkisutama/obsidian-property-presets).
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Author
+
+[Parkis Utama](https://github.com/parkisutama)
 
 ## Funding URL
 
@@ -87,4 +186,4 @@ If you have multiple URLs, you can also do:
 
 ## API Documentation
 
-See https://docs.obsidian.md
+See <https://docs.obsidian.md>

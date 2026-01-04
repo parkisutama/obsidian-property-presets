@@ -1,8 +1,198 @@
-/*
+/* Container for the visual mode suggestions */
+.suggestion-container.popover {
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border-radius: 4px;
+    padding: 0;
+    margin: 0;
+    z-index: var(--layer-popover);
+}
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+.suggestion-item {
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: var(--font-ui-small);
+    color: var(--text-normal);
+}
 
-If your plugin does not need CSS, delete this file.
+.suggestion-item:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
 
-*/
+/* Optional: Scrollbar styling */
+.suggestion-container::-webkit-scrollbar {
+    width: 6px;
+}
+.suggestion-container::-webkit-scrollbar-thumb {
+    background-color: var(--background-modifier-border);
+    border-radius: 3px;
+}
+
+/* Ensure property key has relative positioning for button placement */
+.metadata-property-key {
+    position: relative;
+}
+
+/* Property preset button (ultra-minimal, transparent) */
+.property-preset-btn-container {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    pointer-events: auto;
+    z-index: 1;
+}
+
+.property-preset-btn {
+    margin: 0;
+    padding: 2px 4px;
+    border: none;
+    outline: none;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--text-faint);
+    cursor: pointer;
+    font-size: 11px;
+    line-height: 1;
+    transition: color 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: auto;
+    opacity: 0.6;
+}
+
+.property-preset-btn:hover {
+    color: var(--text-muted);
+    background: transparent !important;
+    box-shadow: none !important;
+    opacity: 1;
+}
+
+.property-preset-btn:active {
+    color: var(--text-muted);
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.property-preset-btn:focus {
+    outline: none;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Mobile optimization */
+.is-mobile .property-preset-btn {
+    padding: 4px 6px;
+    font-size: 12px;
+    min-width: 20px;
+    touch-action: manipulation;
+}
+
+.is-mobile .property-preset-btn-container {
+    right: -2px;
+}
+
+/* Ensure property value container has relative positioning for button placement */
+.metadata-property-value {
+    position: relative;
+}
+
+.metadata-property-value-container {
+    position: relative;
+}
+
+.property-preset-icon {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    opacity: 0.5;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.property-preset-icon:hover {
+    opacity: 1;
+}
+
+.property-preset-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.property-preset-icon-text {
+    font-size: 14px;
+    line-height: 1;
+}
+
+/* Preset selector modal (for multi-select only) */
+.property-presets-selector-modal {
+    width: 400px;
+    max-width: 90vw;
+}
+
+.property-presets-instruction {
+    font-size: var(--font-ui-small);
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.property-presets-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.property-preset-option {
+    padding: 10px 16px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    cursor: pointer;
+    background-color: var(--background-primary) !important;
+    box-shadow: none !important;
+    transition: all 0.15s;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+}
+
+.property-preset-option:hover {
+    background-color: var(--background-modifier-hover) !important;
+    border-color: var(--interactive-accent);
+    box-shadow: none !important;
+}
+
+.property-preset-option.selected {
+    background-color: var(--background-modifier-hover) !important;
+    border-color: var(--interactive-accent);
+    box-shadow: none !important;
+}
+
+.property-preset-checkbox {
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.property-preset-option-text {
+    flex: 1;
+    text-align: left;
+}
