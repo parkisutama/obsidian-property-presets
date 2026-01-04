@@ -10,7 +10,6 @@ import {
 	Plugin,
 	Setting,
 	TFile,
-	MarkdownView,
 	Menu
 } from 'obsidian';
 
@@ -35,7 +34,7 @@ type PropertyType = 'text' | 'multitext' | 'number' | 'checkbox' | 'date' | 'dat
 export default class PropertyPresetsPlugin extends Plugin {
 	presets: PresetConfig = {};
 	types: TypesConfig = {};
-	private reloadDebounceTimer: NodeJS.Timeout | null = null;
+	private reloadDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 	private fileWatcherInterval: number | null = null;
 	private lastPresetsModified: number = 0;
 	private lastTypesModified: number = 0;
@@ -57,8 +56,8 @@ export default class PropertyPresetsPlugin extends Plugin {
 
 		// Watch for external changes to preset/type files using polling
 		// (vault events don't reliably fire for .obsidian/ folder files)
-		this.fileWatcherInterval = window.setInterval(async () => {
-			await this.checkForFileChanges();
+		this.fileWatcherInterval = window.setInterval(() => {
+			void this.checkForFileChanges();
 		}, 2000); // Check every 2 seconds
 
 		this.register(() => {
@@ -125,7 +124,18 @@ export default class PropertyPresetsPlugin extends Plugin {
 		const leaves = this.app.workspace.getLeavesOfType("markdown");
 
 		leaves.forEach((leaf) => {
-			const view = leaf.view as any;
+			const view = leaf.view as {
+				metadataEditor?: {
+					rendered?: Array<{
+						entry?: { key: string };
+						keyEl?: HTMLElement & {
+							findAll: (selector: string) => HTMLElement[];
+							createDiv: (options: { cls: string }) => HTMLElement;
+						};
+					}>;
+				};
+				file?: TFile;
+			};
 			if (!view.metadataEditor || !view.file) return;
 
 			const metadataEditor = view.metadataEditor;
@@ -133,17 +143,16 @@ export default class PropertyPresetsPlugin extends Plugin {
 				return;
 			}
 
-			metadataEditor.rendered.forEach((item: any) => {
+			metadataEditor.rendered.forEach((item) => {
 				const propertyName = item.entry?.key;
 				if (!propertyName || !this.presets[propertyName]) {
 					return;
 				}
 
 				// Remove existing buttons
-				// Remove existing buttons
 				const existingButtons = item.keyEl?.findAll('.property-preset-btn-container');
 				if (existingButtons) {
-					existingButtons.forEach((btn: HTMLElement) => btn.remove());
+					existingButtons.forEach((btn) => btn.remove());
 				}
 
 				if (!item.keyEl) return;
@@ -157,129 +166,128 @@ export default class PropertyPresetsPlugin extends Plugin {
 				btn.setAttribute('aria-label', 'Choose from presets');
 				btn.textContent = '⋮⋮';
 
-				btn.onclick = async (event: MouseEvent) => {
-					event.stopPropagation();
-					const propertyType = this.getPropertyType(propertyName);
-					const allPresetOptions = this.presets[propertyName] || [];
+				btn.onclick = (event: MouseEvent) => {
+					void (async () => {
+						event.stopPropagation();
+						const propertyType = this.getPropertyType(propertyName);
+						const allPresetOptions = this.presets[propertyName] || [];
 
-					if (allPresetOptions.length === 0) {
-						new Notice('No presets available for this property.');
-						return;
-					}
-
-					const allowMultiple = ['list', 'multitext', 'tags'].includes(propertyType);
-					let availableOptions = [...allPresetOptions];
-
-					// For multi-value properties, filter out existing values
-					if (allowMultiple) {
-						try {
-							const fileContent = await this.app.vault.read(view.file);
-							const frontmatterMatch = fileContent.match(/^---\n([\s\S]*?)\n---/);
-
-							if (frontmatterMatch && frontmatterMatch[1]) {
-								const yaml = frontmatterMatch[1];
-								const propertyMatch = yaml.match(new RegExp(`^${propertyName}:\\s*(.*)$`, 'm'));
-
-								if (propertyMatch && propertyMatch[1]) {
-									const valueStr = propertyMatch[1].trim();
-									let existingValues: string[] = [];
-
-									// Check if it's an array (starts with [)
-									if (valueStr.startsWith('[')) {
-										try {
-											const parsed = JSON.parse(valueStr);
-											if (Array.isArray(parsed)) {
-												existingValues = parsed.map(v => String(v));
-											}
-										} catch {
-											// Not valid JSON, might be YAML array
-										}
-									} else if (valueStr) {
-										// Single value
-										existingValues = [valueStr];
-									}
-
-									// Filter out existing values
-									availableOptions = allPresetOptions.filter(opt => !existingValues.includes(opt));
-								}
-							}
-						} catch (err) {
-							console.error('Error parsing frontmatter:', err);
-						}
-
-						if (availableOptions.length === 0) {
-							new Notice(`All preset values already exist in ${propertyName}`);
+						if (allPresetOptions.length === 0) {
+							new Notice('No presets available for this property.');
 							return;
 						}
-					}
 
-					const menu = new Menu();
+						const allowMultiple = ['list', 'multitext', 'tags'].includes(propertyType);
 
-					if (allowMultiple) {
-						// For list/tags properties, ADD value instead of replacing
-						allPresetOptions.forEach(option => {
-							menu.addItem(item => {
-								item.setTitle(option)
-									.onClick(async () => {
-										try {
-											await this.app.fileManager.processFrontMatter(view.file, (frontmatter: Record<string, unknown>) => {
-												const currentValue = frontmatter[propertyName];
-												let newValue: string[];
+						// For multi-value properties, check for duplicates
+						if (allowMultiple) {
+							try {
+								if (!view.file) return; const fileContent = await this.app.vault.read(view.file);
+								const frontmatterMatch = fileContent.match(/^---\n([\s\S]*?)\n---/);
 
-												// Handle existing values - ALWAYS create/append to array
-												if (Array.isArray(currentValue)) {
-													// Check for duplicate before adding
-													const stringArray = currentValue.map(v => String(v));
-													if (!stringArray.includes(option)) {
-														newValue = [...currentValue, option];
-													} else {
-														new Notice(`${option} already exists in ${propertyName}`);
-														return;
+								if (frontmatterMatch && frontmatterMatch[1]) {
+									const yaml = frontmatterMatch[1];
+									const propertyMatch = yaml.match(new RegExp(`^${propertyName}:\\s*(.*)$`, 'm'));
+
+									if (propertyMatch && propertyMatch[1]) {
+										const valueStr = propertyMatch[1].trim();
+
+
+										// Check if it's an array (starts with [)
+										if (valueStr.startsWith('[')) {
+											try {
+												const parsed = JSON.parse(valueStr) as unknown;
+												if (Array.isArray(parsed)) {
+													const existingValuesArray = parsed.map((v: unknown) => String(v));
+													// Check if all preset options already exist
+													if (existingValuesArray.length >= allPresetOptions.length) {
+														// All options likely already added, but we'll let menu handle duplicates
 													}
-												} else if (currentValue && currentValue !== '') {
-													// Convert existing single value to array
-													const existingStr = String(currentValue);
-													if (existingStr === option) {
-														new Notice(`${option} already exists in ${propertyName}`);
-														return;
-													}
-													newValue = [existingStr, option];
-												} else {
-													// Empty or undefined - create new array
-													newValue = [option];
 												}
-
-												frontmatter[propertyName] = newValue;
-											});
-											new Notice(`Added ${option} to ${propertyName}`);
-										} catch (err) {
-											console.error('Failed to update property:', err);
-											new Notice('Failed to update property.');
+											} catch {
+												// Not valid JSON, might be YAML array
+											}
 										}
-									});
-							});
-						});
-					} else {
-						// For single-select properties, SET value (replace)
-						allPresetOptions.forEach(option => {
-							menu.addItem(item => {
-								item.setTitle(option)
-									.onClick(async () => {
-										try {
-											await this.app.fileManager.processFrontMatter(view.file, (frontmatter: Record<string, unknown>) => {
-												frontmatter[propertyName] = option;
-											});
-											new Notice(`Set ${propertyName} to: ${option}`);
-										} catch (err) {
-											console.error('Failed to update property:', err);
-											new Notice('Failed to update property.');
-										}
-									});
-							});
-						});
-					}
+									}
+								}
+							} catch {
+								// Error parsing frontmatter - continue with all options
+							}
+						}
 
-					menu.showAtMouseEvent(event);
+						const menu = new Menu();
+
+						if (allowMultiple) {
+							// For list/tags properties, ADD value instead of replacing
+							allPresetOptions.forEach(option => {
+								menu.addItem(item => {
+									item.setTitle(option)
+										.onClick(async () => {
+											try {
+												if (!view.file) return;
+												await this.app.fileManager.processFrontMatter(view.file as unknown as Parameters<typeof this.app.fileManager.processFrontMatter>[0], (frontmatter: Record<string, unknown>) => {
+													const currentValue = frontmatter[propertyName];
+													let newValue: string[];
+
+													// Handle existing values - ALWAYS create/append to array
+													if (Array.isArray(currentValue)) {
+														// Check for duplicate before adding
+														const stringArray = currentValue.map((v: unknown) => String(v));
+														if (!stringArray.includes(option)) {
+															newValue = [...(currentValue as string[]), option];
+														} else {
+															new Notice(`${option} already exists in ${propertyName}`);
+															return;
+														}
+													} else if (currentValue != null && currentValue !== '') {
+														// Convert existing single value to array
+														if (typeof currentValue === 'object' && currentValue !== null) {
+															// For objects, replace with new value
+															newValue = [option];
+														} else {
+															const existingStr = String(currentValue as string | number | boolean);
+															if (existingStr === option) {
+																new Notice(`${option} already exists in ${propertyName}`);
+																return;
+															}
+															newValue = [existingStr, option];
+														}
+													} else {
+														// Empty or undefined - create new array
+														newValue = [option];
+													}
+
+													frontmatter[propertyName] = newValue;
+												});
+												new Notice(`Added ${option} to ${propertyName}`);
+											} catch {
+												new Notice('Failed to update property.');
+											}
+										});
+								});
+							});
+						} else {
+							// For single-select properties, SET value (replace)
+							allPresetOptions.forEach(option => {
+								menu.addItem(item => {
+									item.setTitle(option)
+										.onClick(async () => {
+											try {
+												if (!view.file) return;
+												await this.app.fileManager.processFrontMatter(view.file as unknown as Parameters<typeof this.app.fileManager.processFrontMatter>[0], (frontmatter: Record<string, unknown>) => {
+													frontmatter[propertyName] = option;
+												});
+												new Notice(`Set ${propertyName} to: ${option}`);
+											} catch {
+												new Notice('Failed to update property.');
+											}
+										});
+								});
+							});
+						}
+
+						menu.showAtMouseEvent(event);
+					})();
 				};
 			});
 		});
@@ -301,8 +309,7 @@ export default class PropertyPresetsPlugin extends Plugin {
 				await adapter.write(presetsPath, JSON.stringify(defaultPresets, null, 2));
 				this.presets = defaultPresets;
 			}
-		} catch (err) {
-			console.error("Failed to load presets:", err);
+		} catch {
 			new Notice("Error loading presets. Check console.");
 		}
 	}
@@ -313,11 +320,11 @@ export default class PropertyPresetsPlugin extends Plugin {
 		try {
 			if (await adapter.exists(typesPath)) {
 				const content = await adapter.read(typesPath);
-				const parsed = JSON.parse(content);
+				const parsed = JSON.parse(content) as { types?: TypesConfig } | TypesConfig;
 
 				// Handle both flat structure and nested {types: {...}} structure
-				if (parsed.types && typeof parsed.types === 'object') {
-					this.types = parsed.types as TypesConfig;
+				if ('types' in parsed && parsed.types && typeof parsed.types === 'object') {
+					this.types = parsed.types;
 				} else {
 					this.types = parsed as TypesConfig;
 				}
@@ -330,8 +337,7 @@ export default class PropertyPresetsPlugin extends Plugin {
 				await adapter.write(typesPath, JSON.stringify(defaultTypes, null, 2));
 				this.types = defaultTypes;
 			}
-		} catch (err) {
-			console.error("Failed to load types:", err);
+		} catch {
 			new Notice("Error loading types. Check console.");
 		}
 	}
@@ -357,12 +363,14 @@ export default class PropertyPresetsPlugin extends Plugin {
 		if (this.reloadDebounceTimer) {
 			clearTimeout(this.reloadDebounceTimer);
 		}
-		this.reloadDebounceTimer = setTimeout(async () => {
-			await this.loadPresets();
-			await this.loadTypes();
-			this.addPresetIcons();
-			new Notice('Property presets auto-reloaded from file changes');
-			this.reloadDebounceTimer = null;
+		this.reloadDebounceTimer = setTimeout(() => {
+			void (async () => {
+				await this.loadPresets();
+				await this.loadTypes();
+				this.addPresetIcons();
+				new Notice('Property presets auto-reloaded from file changes');
+				this.reloadDebounceTimer = null;
+			})();
 		}, 500);
 	}
 
@@ -376,7 +384,7 @@ export default class PropertyPresetsPlugin extends Plugin {
 			const typesStat = await adapter.stat(this.getTypesPath());
 			this.lastPresetsModified = presetsStat?.mtime || 0;
 			this.lastTypesModified = typesStat?.mtime || 0;
-		} catch (err) {
+		} catch {
 			// Files might not exist yet
 		}
 	}
@@ -399,7 +407,7 @@ export default class PropertyPresetsPlugin extends Plugin {
 				this.lastTypesModified = typesModified;
 				this.debouncedReload();
 			}
-		} catch (err) {
+		} catch {
 			// Files might not exist or be inaccessible
 		}
 	}
@@ -455,9 +463,9 @@ class PropertyPresetSuggester extends EditorSuggest<string> {
 		// Check if it's an array (starts with [)
 		if (valueStr.startsWith('[')) {
 			try {
-				const parsed = JSON.parse(valueStr);
+				const parsed = JSON.parse(valueStr) as unknown;
 				if (Array.isArray(parsed)) {
-					return parsed.map(v => String(v));
+					return parsed.map((v: unknown) => String(v));
 				}
 			} catch {
 				// Not valid JSON, continue to check YAML-style arrays
@@ -494,7 +502,7 @@ class PropertyPresetSuggester extends EditorSuggest<string> {
 	}
 	getSuggestions(context: EditorSuggestContext): string[] {
 		const line = context.editor.getLine(context.start.line);
-		const match = line.substring(0, context.start.ch).match(/^([a-zA-Z_][a-zA-Z0-9_-]*):/)
+		const match = line.substring(0, context.start.ch).match(/^([a-zA-Z_][a-zA-Z0-9_-]*):/);
 		const propertyName = match ? match[1] : null;
 		if (!propertyName) return [];
 
@@ -506,11 +514,12 @@ class PropertyPresetSuggester extends EditorSuggest<string> {
 		el.createDiv({ text: value, cls: 'suggestion-item' });
 	}
 
-	selectSuggestion(value: string, evt: MouseEvent | KeyboardEvent): void {
+	selectSuggestion(value: string): void {
 		const cursor = this.context!.start;
 		const editor = this.context!.editor;
 		const line = editor.getLine(cursor.line);
-		const propertyName = line.substring(0, cursor.ch).match(/^([a-zA-Z_][a-zA-Z0-9_-]*):/)![1];
+		const propertyMatch = line.substring(0, cursor.ch).match(/^([a-zA-Z_][a-zA-Z0-9_-]*):/);
+		const propertyName = propertyMatch ? propertyMatch[1] : null;
 
 		if (!propertyName) return;
 
